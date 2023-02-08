@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #define pr_fmt(fmt) "synx: " fmt
 
@@ -549,7 +550,7 @@ int synx_release(s32 synx_obj)
 
 	fence = row->fence;
 	rc = synx_release_core(row);
-	dma_fence_put(fence);
+	synx_release_handle(row);
 	return rc;
 }
 
@@ -1241,22 +1242,8 @@ static int synx_handle_bind(struct synx_private_ioctl_arg *k_ioctl)
 
 static int synx_handle_addrefcount(struct synx_private_ioctl_arg *k_ioctl)
 {
-	struct synx_addrefcount addrefcount_info;
-
-	if (k_ioctl->size != sizeof(addrefcount_info))
-		return -EINVAL;
-
-	if (copy_from_user(&addrefcount_info,
-		u64_to_user_ptr(k_ioctl->ioctl_ptr),
-		k_ioctl->size))
-		return -EFAULT;
-
-	pr_debug("calling synx_addrefcount: 0x%x, %d\n",
-		addrefcount_info.synx_obj, addrefcount_info.count);
-	k_ioctl->result = synx_addrefcount(addrefcount_info.synx_obj,
-		addrefcount_info.count);
-
-	return k_ioctl->result;
+	/* API deprecated for userspace */
+	return 0;
 }
 
 static int synx_handle_release(struct synx_private_ioctl_arg *k_ioctl)
@@ -1599,6 +1586,8 @@ int synx_initialize(struct synx_initialization_params *params)
 
 	mutex_lock(&synx_dev->table_lock);
 	synx_dev->open_cnt++;
+	/* zero handle not allowed */
+	set_bit(0, synx_dev->bitmap);
 	mutex_unlock(&synx_dev->table_lock);
 
 	if (params)

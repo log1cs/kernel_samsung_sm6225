@@ -647,8 +647,10 @@ static void qcom_glink_rx_done(struct qcom_glink *glink,
 
 	/* We don't send RX_DONE to intentless systems */
 	if (glink->intentless) {
-		kfree(intent->data);
-		kfree(intent);
+		if (intent->id != 0xdeadbead) {
+			kfree(intent->data);
+			kfree(intent);
+		}
 		return;
 	}
 
@@ -955,6 +957,9 @@ static int qcom_glink_rx_defer(struct qcom_glink *glink, size_t extra)
 	return 0;
 }
 
+#define RPM_REQ_DATA_LEN       256
+static struct glink_core_rx_intent g_rpm_request_intent;
+static char g_rpm_request_data[RPM_REQ_DATA_LEN];
 static int qcom_glink_rx_data(struct qcom_glink *glink, size_t avail)
 {
 	struct glink_core_rx_intent *intent;
@@ -1008,6 +1013,7 @@ static int qcom_glink_rx_data(struct qcom_glink *glink, size_t avail)
 	if (glink->intentless) {
 		/* Might have an ongoing, fragmented, message to append */
 		if (!channel->buf) {
+#if 0
 			intent = kzalloc(sizeof(*intent), GFP_ATOMIC);
 			if (!intent)
 				return -ENOMEM;
@@ -1018,8 +1024,12 @@ static int qcom_glink_rx_data(struct qcom_glink *glink, size_t avail)
 				kfree(intent);
 				return -ENOMEM;
 			}
+#endif
+			intent = &g_rpm_request_intent;
+			intent->data = &g_rpm_request_data[0];
+			memset((void *)intent->data, 0x0, RPM_REQ_DATA_LEN);
 
-			intent->id = 0xbabababa;
+			intent->id = 0xdeadbead;
 			intent->size = chunk_size + left_size;
 			intent->offset = 0;
 

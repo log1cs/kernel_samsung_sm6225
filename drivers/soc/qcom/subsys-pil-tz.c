@@ -10,6 +10,7 @@
 #include <linux/platform_device.h>
 #include <linux/of.h>
 #include <linux/clk.h>
+#include <linux/gpio.h>
 #include <linux/regulator/consumer.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
@@ -697,6 +698,14 @@ static int pil_auth_and_reset(struct pil_desc *pil)
 	if (rc)
 		return rc;
 
+	if (gpio_is_valid(d->subsys_desc.sensor_1p8_en) && !strncmp(d->subsys_desc.name, "adsp", 4)) {
+		gpio_direction_output(d->subsys_desc.sensor_1p8_en, 1);
+
+		pr_info("%s, %s sensor_1p8_en(%d) value(%d)\n",
+			__func__, d->subsys_desc.name, d->subsys_desc.sensor_1p8_en,
+			gpio_get_value_cansleep(d->subsys_desc.sensor_1p8_en));
+	}
+
 	rc = prepare_enable_clocks(pil->dev, d->clks, d->clk_count);
 	if (rc)
 		goto err_clks;
@@ -714,6 +723,14 @@ err_reset:
 	disable_unprepare_clocks(d->clks, d->clk_count);
 err_clks:
 	disable_regulators(d, d->regs, d->reg_count, false);
+
+	if (gpio_is_valid(d->subsys_desc.sensor_1p8_en) && !strncmp(d->subsys_desc.name, "adsp", 4)) {
+		gpio_direction_output(d->subsys_desc.sensor_1p8_en, 0);
+
+		pr_err("%s, %s err_clks: sensor_1p8_en(%d) value(%d)\n",
+			__func__, d->subsys_desc.name, d->subsys_desc.sensor_1p8_en,
+			gpio_get_value_cansleep(d->subsys_desc.sensor_1p8_en));
+	}
 
 	return rc;
 }
@@ -759,6 +776,14 @@ static int pil_shutdown_trusted(struct pil_desc *pil)
 
 	disable_unprepare_clocks(d->clks, d->clk_count);
 	disable_regulators(d, d->regs, d->reg_count, false);
+
+	if (gpio_is_valid(d->subsys_desc.sensor_1p8_en) && !strncmp(d->subsys_desc.name, "adsp", 4)) {
+		gpio_direction_output(d->subsys_desc.sensor_1p8_en, 0);
+
+		pr_err("%s, %s sensor_1p8_en(%d) value(%d)\n",
+			__func__, d->subsys_desc.name, d->subsys_desc.sensor_1p8_en,
+			gpio_get_value_cansleep(d->subsys_desc.sensor_1p8_en));
+	}
 
 	return scm_ret;
 
@@ -888,7 +913,12 @@ static void subsys_crash_shutdown(const struct subsys_desc *subsys)
 		qcom_smem_state_update_bits(subsys->state,
 			BIT(subsys->force_stop_bit),
 			BIT(subsys->force_stop_bit));
-		mdelay(CRASH_STOP_ACK_TO_MS);
+#if defined(CONFIG_SEC_DEBUG)
+		if (likely(!in_atomic()))
+			msleep(CRASH_STOP_ACK_TO_MS);
+		else
+#endif
+			mdelay(CRASH_STOP_ACK_TO_MS);
 	}
 }
 

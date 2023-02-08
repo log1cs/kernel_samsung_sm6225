@@ -82,6 +82,10 @@
 
 #include "internal.h"
 
+#ifdef CONFIG_PAGE_BOOST_RECORDING
+#include <linux/io_record.h>
+#endif
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/pagefault.h>
 
@@ -4033,6 +4037,10 @@ static vm_fault_t do_read_fault(struct vm_fault *vmf)
 		ret = do_fault_around(vmf);
 		if (ret)
 			return ret;
+#ifdef CONFIG_PAGE_BOOST_RECORDING
+	} else if (vma->vm_ops->map_pages && fault_around_bytes >> PAGE_SHIFT == 1) {
+		record_io_info(vma->vm_file, vmf->pgoff, 1);
+#endif
 	}
 
 	ret = __do_fault(vmf);
@@ -4746,6 +4754,7 @@ int __handle_speculative_fault(struct mm_struct *mm, unsigned long address,
 			count_vm_event(SPECULATIVE_PGFAULT_FILE);
 		put_vma(vmf.vma);
 		*vma = NULL;
+		check_sync_rss_stat(current);
 	}
 
 	/*
@@ -4771,6 +4780,7 @@ out_segv:
 	 */
 	put_vma(vmf.vma);
 	*vma = NULL;
+	check_sync_rss_stat(current);
 	return VM_FAULT_SIGSEGV;
 }
 
